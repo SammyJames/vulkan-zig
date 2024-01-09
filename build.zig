@@ -8,6 +8,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const vk_xml_path: ?[]const u8 = b.option([]const u8, "registry", "Override the path to the Vulkan registry");
+    const vk_shaders: ?[]const []const u8 = b.option([]const []const u8, "shaders", "shaders to build");
 
     // using the package manager, this artifact can be obtained by the user
     // through `b.dependency(<name in build.zig.zon>, .{}).artifact("generator")`.
@@ -34,6 +35,28 @@ pub fn build(b: *std.Build) void {
         });
     }
 
+    const shaders = ShaderCompileStep.create(
+        b,
+        &[_][]const u8{ "glslc", "--target-env=vulkan1.2" },
+        "-o",
+    );
+
+    if (vk_shaders) |shaders_list| {
+        for (shaders_list) |shader| {
+            const name = std.fs.path.basename(shader);
+            const needed = std.mem.replacementSize(u8, name, ".", "_");
+            const result = b.allocator.alloc(u8, needed) catch @panic("OOM");
+            errdefer b.allocator.free(result);
+
+            _ = std.mem.replace(u8, name, ".", "_", result);
+            shaders.addAbsolute(result, shader, .{});
+        }
+
+        _ = b.addModule("vulkan-shaders", .{
+            .root_source_file = shaders.getSource(),
+        });
+    }
+
     // remainder of the script is for local testing
 
     const triangle_exe = b.addExecutable(.{
@@ -53,13 +76,8 @@ pub fn build(b: *std.Build) void {
     const vk_zig_install_step = b.addInstallFile(gen.getSource(), "src/vk.zig");
     b.getInstallStep().dependOn(&vk_zig_install_step.step);
 
-    const shaders = ShaderCompileStep.create(
-        b,
-        &[_][]const u8{ "glslc", "--target-env=vulkan1.2" },
-        "-o",
-    );
-    shaders.add("triangle_vert", "examples/shaders/triangle.vert", .{});
-    shaders.add("triangle_frag", "examples/shaders/triangle.frag", .{});
+    //shaders.add("triangle_vert", "examples/shaders/triangle.vert", .{});
+    //shaders.add("triangle_frag", "examples/shaders/triangle.frag", .{});
     triangle_exe.root_module.addImport("shaders", shaders.getModule());
 
     const triangle_run_cmd = b.addRunArtifact(triangle_exe);

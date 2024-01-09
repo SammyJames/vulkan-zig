@@ -123,6 +123,16 @@ pub const ShaderCompileStep = struct {
         }) catch unreachable;
     }
 
+    /// Add a shader to be compiled.
+    pub fn addAbsolute(self: *ShaderCompileStep, name: []const u8, src: []const u8, options: ShaderOptions) void {
+        self.shaders.append(.{
+            .name = name,
+            .source_path = src,
+            .hash = undefined,
+            .options = options,
+        }) catch unreachable;
+    }
+
     /// Create a hash of a shader's source contents.
     fn hashShaderToFileName(self: *ShaderCompileStep, shader: Shader) ![64]u8 {
         const b = self.step.owner;
